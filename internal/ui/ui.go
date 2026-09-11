@@ -1,3 +1,4 @@
+// Package ui renders styled terminal output with graceful plain-text fallback.
 package ui
 
 import (
@@ -16,6 +17,7 @@ import (
 var (
 	noColor bool
 
+	// Shared Lipgloss styles; all renderers honor SetNoColor.
 	TitleStyle   = lipgloss.NewStyle().Bold(true)
 	SuccessStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 	ErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)

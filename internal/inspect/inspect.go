@@ -1,3 +1,4 @@
+// Package inspect summarizes retained Minecraft assets in JAR files and directories.
 package inspect
 
 import (

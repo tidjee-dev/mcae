@@ -1,3 +1,4 @@
+// Package extractor implements filtered JAR extraction for mods, modpacks and vanilla clients.
 package extractor
 
 import (

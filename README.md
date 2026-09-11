@@ -1,11 +1,17 @@
 # mcae — Minecraft Companion Assets Extractor
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/tidjee-dev/mcae.svg)](https://pkg.go.dev/github.com/tidjee-dev/mcae)
+
 CLI to extract and inspect Minecraft mod, modpack and vanilla assets.
+
+> **Disclaimer:** `mcae` is an unofficial, community-made tool and is not
+> affiliated with, endorsed by, or connected to Mojang Studios or
+> Microsoft.
 
 ## Requirements
 
-* Go `1.27.1` (see `go.mod`)
-* `gh` CLI (optional, for the PR workflow)
+- Go `1.27.1` (see `go.mod`)
+- `gh` CLI (optional, for the PR workflow)
 
 ## Installation
 
@@ -27,21 +33,21 @@ go build ./...
 mcae --help
 mcae extract --help
 
-mcae extract mod ./mods/create-6.0.6.jar
-mcae extract mod ./mods/create-6.0.6.jar --output ./data
-mcae extract mod ./mods/create-6.0.6.jar --force
+mcae extract mod <mod_jar_file>
+mcae extract mod <mod_jar_file> --output <output_dir>
+mcae extract mod <mod_jar_file> --force
 
-mcae extract modpack ./data/modpacks/cuboid-outpost-luxury
-mcae extract modpack ./data/modpacks/cuboid-outpost-luxury --output ./data/extracted
-mcae extract modpack ./data/modpacks/cuboid-outpost-luxury --force
+mcae extract modpack <modpack_dir>
+mcae extract modpack <modpack_dir> --output <output_dir>
+mcae extract modpack <modpack_dir> --force
 
-mcae extract vanilla 1.21.8
-mcae extract vanilla 1.21.8 --output ./data/minecraft
-mcae extract vanilla 1.21.8 --force
+mcae extract vanilla <minecraft_version>
+mcae extract vanilla <minecraft_version> --output <output_dir>
+mcae extract vanilla <minecraft_version> --force
 
-mcae inspect ./extracted/create-6.0.6
-mcae inspect ./mods/create-6.0.6.jar
-mcae inspect ./data/modpacks/cuboid-outpost-luxury
+mcae inspect <extracted_dir>
+mcae inspect <mod_jar_file>
+mcae inspect <modpack_dir>
 
 mcae version
 mcae --version
@@ -67,8 +73,8 @@ output falls back to stable streaming lines. `--quiet` prints only the
 resulting directories (one per line), which is convenient for scripts:
 
 ```bash
-mcae extract mod ./mods/example.jar -q
-# ./extracted/example
+mcae extract mod <mod_jar_file> -q
+# ./extracted/<mod_name>
 ```
 
 Errors are printed once as `Error: …` to stderr without usage spam.
@@ -113,30 +119,30 @@ Extracted 2 mods: 4 assets, 4 data files in 25ms
 Mod:
 
 ```text
-./extracted/create-6.0.6/
-# or with --output ./data:
-data/
-└── create-6.0.6/
+./extracted/<mod_name>/
+# or with --output <output_dir>:
+<output_dir>/
+└── <mod_name>/
 ```
 
 Modpack (each JAR gets its own directory):
 
 ```text
-cuboid-outpost-luxury/
+<modpack_dir>/
 ├── mods/
-│   ├── create-6.0.6.jar
-│   └── jei-*.jar
+│   ├── <mod_name>.jar
+│   └── <other_mod>.jar
 └── extracted/
-    ├── create-6.0.6/
-    └── jei-*/
+    ├── <mod_name>/
+    └── <other_mod>/
 ```
 
 Vanilla (`--output` is a base directory):
 
 ```text
-./extracted/vanilla/1.21.8/
-# with --output ./data/minecraft:
-./data/minecraft/vanilla/1.21.8/
+./extracted/vanilla/<minecraft_version>/
+# with --output <output_dir>:
+<output_dir>/vanilla/<minecraft_version>/
 ```
 
 Vanilla assets are resolved via Mojang's version manifest, the client JAR
@@ -206,6 +212,11 @@ go build ./...
 Tests use temp dirs and `archive/zip` fixtures (plus `httptest` for the
 vanilla manifest); no real Minecraft or mod JARs are required.
 
+API reference is published on
+[pkg.go.dev](https://pkg.go.dev/github.com/tidjee-dev/mcae). Note that most
+logic lives under `internal/` (CLI implementation detail, not importable);
+the module page is the entry point.
+
 ## Version
 
 Version is centralized in `internal/version`:
@@ -213,7 +224,7 @@ Version is centralized in `internal/version`:
 ```go
 var (
     Name    = "mcae"
-    Version = "0.1.0"
+    Version = "1.0.0"
 )
 ```
 
@@ -223,5 +234,13 @@ The variables (not constants) allow build-time injection:
 go build -ldflags "-X github.com/tidjee-dev/mcae/internal/version.Version=x.y.z" ./...
 ```
 
-`mcae version` prints `mcae 0.1.0`; the root `--version` flag prints
-`mcae version 0.1.0` (Cobra default template).
+`mcae version` prints `mcae 1.0.0`; the root `--version` flag prints
+`mcae version 1.0.0` (Cobra default template).
+
+## Disclaimer
+
+`mcae` is an unofficial, community-made tool and is not affiliated with,
+endorsed by, or connected to Mojang Studios or Microsoft. Minecraft is a
+trademark of Mojang Synergies AB. Vanilla assets are downloaded from
+Mojang's official servers at runtime and are never bundled or
+redistributed by this project.

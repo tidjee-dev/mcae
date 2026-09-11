@@ -18,10 +18,10 @@ func newVanillaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vanilla <version>",
 		Short: "Extract vanilla Minecraft assets",
-		Long:  "Resolve the version through Mojang's version manifest, download the client JAR to a temp file, and extract retained assets.",
-		Example: "  mcae extract vanilla 1.21.8\n" +
-			"  mcae extract vanilla 1.21.8 --output ./data/minecraft\n" +
-			"  mcae extract vanilla 1.21.8 --force",
+		Long:  "Resolve the version through Mojang's version manifest, download the client JAR to a temp file, and extract retained assets. Unofficial tool, not affiliated with Mojang.",
+		Example: "  mcae extract vanilla <minecraft_version>\n" +
+			"  mcae extract vanilla <minecraft_version> --output <output_dir>\n" +
+			"  mcae extract vanilla <minecraft_version> --force",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")

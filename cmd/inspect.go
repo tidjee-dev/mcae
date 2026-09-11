@@ -14,9 +14,9 @@ var inspectCmd = &cobra.Command{
 	Use:   "inspect <path>",
 	Short: "Inspect a mod JAR or extracted directory",
 	Long:  "Accepts a .jar file, an extracted directory, or a modpack directory (containing mods/). Prints one summary table with totals plus the namespace list.",
-	Example: "  mcae inspect ./mods/create-6.0.6.jar\n" +
-		"  mcae inspect ./extracted/create-6.0.6\n" +
-		"  mcae inspect ./data/modpacks/cuboid-outpost-luxury",
+	Example: "  mcae inspect <mod_jar_file>\n" +
+		"  mcae inspect <extracted_dir>\n" +
+		"  mcae inspect <modpack_dir>",
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		report, err := inspect.Inspect(args[0])

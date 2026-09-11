@@ -58,10 +58,12 @@ func NewVanillaModel(version string) VanillaModel {
 	}
 }
 
+// Init starts the spinner tick.
 func (m VanillaModel) Init() tea.Cmd {
 	return m.spin.Tick
 }
 
+// Update advances the model on worker and spinner messages.
 func (m VanillaModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -120,6 +122,7 @@ func (m VanillaModel) percent() float64 {
 	return p
 }
 
+// View renders the current stage screen.
 func (m VanillaModel) View() string {
 	var b strings.Builder
 	if m.finished && m.failed == nil && m.result != nil {

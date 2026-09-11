@@ -1,3 +1,4 @@
+// Package live provides interactive Bubbletea progress views for extraction.
 package live
 
 import (
@@ -50,10 +51,12 @@ func NewModpackModel(total int) ModpackModel {
 	}
 }
 
+// Init starts the spinner tick.
 func (m ModpackModel) Init() tea.Cmd {
 	return m.spin.Tick
 }
 
+// Update advances the model on worker and spinner messages.
 func (m ModpackModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -127,6 +130,7 @@ func (m ModpackModel) percent() float64 {
 	return float64(m.done) / float64(m.total)
 }
 
+// View renders the current progress screen.
 func (m ModpackModel) View() string {
 	var b strings.Builder
 	b.WriteString(ui.ModpackHeader(m.total))

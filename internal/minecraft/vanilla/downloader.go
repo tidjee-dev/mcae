@@ -1,3 +1,4 @@
+// Package vanilla resolves, downloads and extracts vanilla Minecraft client assets.
 package vanilla
 
 import (

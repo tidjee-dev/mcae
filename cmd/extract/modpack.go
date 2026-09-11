@@ -21,9 +21,9 @@ func newModpackCmd() *cobra.Command {
 		Use:   "modpack <modpack>",
 		Short: "Extract all Minecraft mod JARs from a modpack",
 		Long:  "Find .jar files directly inside <modpack>/mods and extract each into its own directory under <modpack>/extracted unless --output is given.",
-		Example: "  mcae extract modpack ./data/modpacks/cuboid-outpost-luxury\n" +
-			"  mcae extract modpack ./data/modpacks/cuboid-outpost-luxury --output ./data/extracted\n" +
-			"  mcae extract modpack ./data/modpacks/cuboid-outpost-luxury --force",
+		Example: "  mcae extract modpack <modpack_dir>\n" +
+			"  mcae extract modpack <modpack_dir> --output <output_dir>\n" +
+			"  mcae extract modpack <modpack_dir> --force",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			quiet, _ := cmd.Flags().GetBool("quiet")

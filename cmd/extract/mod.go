@@ -20,9 +20,9 @@ func newModCmd() *cobra.Command {
 		Use:   "mod <mod.jar>",
 		Short: "Extract a Minecraft mod JAR",
 		Long:  "Extract retained assets and data from a single Minecraft mod JAR. Output goes to ./extracted/<modname> unless --output is given.",
-		Example: "  mcae extract mod ./mods/create-6.0.6.jar\n" +
-			"  mcae extract mod ./mods/create-6.0.6.jar --output ./data\n" +
-			"  mcae extract mod ./mods/create-6.0.6.jar --force",
+		Example: "  mcae extract mod <mod_jar_file>\n" +
+			"  mcae extract mod <mod_jar_file> --output <output_dir>\n" +
+			"  mcae extract mod <mod_jar_file> --force",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jarPath := args[0]

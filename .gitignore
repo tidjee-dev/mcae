@@ -1,0 +1,29 @@
+# Binaries
+mcae
+*.exe
+*.out
+/dist/
+/bin/
+
+# Build cache
+*.test
+*.prof
+
+# Go workspace
+go.work
+go.work.sum
+
+# Extracted / downloaded Minecraft assets (never commit)
+extracted/
+data/
+*.jar
+
+# Temp / OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

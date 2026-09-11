@@ -1,25 +1,35 @@
+// Package ui renders styled terminal output with graceful plain-text fallback.
 package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
+	ltable "github.com/charmbracelet/lipgloss/table"
+	"github.com/mattn/go-isatty"
 	"github.com/muesli/termenv"
 )
 
 var (
 	noColor bool
 
+	// Shared Lipgloss styles; all renderers honor SetNoColor.
 	TitleStyle   = lipgloss.NewStyle().Bold(true)
 	SuccessStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 	ErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
 	MutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	HeaderStyle  = lipgloss.NewStyle().Bold(true).Underline(true)
 	PathStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+)
+
+// AssetOrder and DataOrder define stable row ordering for summaries.
+var (
+	AssetOrder = []string{"lang", "models/block", "models/item", "textures/block", "textures/entity", "textures/item"}
+	DataOrder  = []string{"recipes", "loot_tables", "tags/blocks", "tags/items"}
 )
 
 // SetNoColor disables ANSI styling (for --no-color, NO_COLOR, piped output, tests).
@@ -32,6 +42,11 @@ func SetNoColor(v bool) {
 
 // IsNoColor reports whether styling is disabled.
 func IsNoColor() bool { return noColor }
+
+// IsTTY reports whether stdout is an interactive terminal.
+func IsTTY() bool {
+	return isatty.IsTerminal(os.Stdout.Fd())
+}
 
 // Title renders a bold heading.
 func Title(s string) string {
@@ -55,6 +70,21 @@ func Failure(s string) string {
 		return s
 	}
 	return ErrorStyle.Render(s)
+}
+
+// ErrorLine renders a single "Error: msg" line for stderr.
+func ErrorLine(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return ""
+	}
+	if !strings.HasPrefix(strings.ToLower(msg), "error") {
+		msg = "Error: " + msg
+	}
+	if noColor {
+		return msg
+	}
+	return ErrorStyle.Render(msg)
 }
 
 // Muted renders dim text.
@@ -135,52 +165,58 @@ func SpinnerFrame(frame int) string {
 	return frames[frame%len(frames)]
 }
 
-// InspectTable renders asset/data counts as a bubbles table (static view).
-func InspectTable(assets, data map[string]int) string {
-	cols := []table.Column{
-		{Title: "Category", Width: 16},
-		{Title: "Files", Width: 8},
+func tableStyle() (*lipgloss.Style, func(row, col int) lipgloss.Style) {
+	header := lipgloss.NewStyle().Bold(true)
+	if noColor {
+		header = lipgloss.NewStyle()
 	}
-	var rows []table.Row
-	order := []string{"lang", "models/block", "models/item", "textures/block", "textures/entity", "textures/item"}
-	for _, k := range order {
+	styleFn := func(row, col int) lipgloss.Style {
+		if row == ltable.HeaderRow && !noColor {
+			return header
+		}
+		return lipgloss.NewStyle()
+	}
+	return &header, styleFn
+}
+
+// InspectTable renders asset/data counts as a single table.
+// Either map may be nil; a combined section column is used.
+func InspectTable(assets, data map[string]int) string {
+	var rows [][]string
+	for _, k := range AssetOrder {
 		if v, ok := assets[k]; ok && v > 0 {
-			rows = append(rows, table.Row{k, fmt.Sprintf("%d", v)})
+			rows = append(rows, []string{"assets", k, fmt.Sprintf("%d", v)})
 		}
 	}
-	dorder := []string{"recipes", "loot_tables", "tags/blocks", "tags/items"}
-	for _, k := range dorder {
+	for _, k := range DataOrder {
 		if v, ok := data[k]; ok && v > 0 {
-			rows = append(rows, table.Row{k, fmt.Sprintf("%d", v)})
+			rows = append(rows, []string{"data", k, fmt.Sprintf("%d", v)})
 		}
 	}
 	if len(rows) == 0 {
 		return Muted("  (no retained assets found)")
 	}
 
-	t := table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithHeight(len(rows)+1),
-	)
-	style := table.DefaultStyles()
-	style.Header = style.Header.Bold(true)
-	if noColor {
-		style.Header = lipgloss.NewStyle()
-		style.Selected = lipgloss.NewStyle()
-	}
-	t.SetStyles(style)
-	return t.View()
+	_, styleFn := tableStyle()
+	t := ltable.New().
+		Border(lipgloss.NormalBorder()).
+		Headers("Section", "Category", "Files").
+		Rows(rows...).
+		StyleFunc(styleFn)
+	return t.Render()
 }
 
-// ModpackTable renders a per-mod breakdown table.
+// ModRow is one row of the modpack breakdown.
+type ModRow struct {
+	Name       string
+	Namespaces int
+	Assets     int
+	Data       int
+}
+
+// ModpackTable renders a per-mod breakdown table (kept for compatibility).
 func ModpackTable(names []string, assets, data []int) string {
-	cols := []table.Column{
-		{Title: "Mod", Width: 30},
-		{Title: "Assets", Width: 8},
-		{Title: "Data", Width: 8},
-	}
-	var rows []table.Row
+	rows := make([]ModRow, len(names))
 	for i, n := range names {
 		a, d := 0, 0
 		if i < len(assets) {
@@ -189,25 +225,77 @@ func ModpackTable(names []string, assets, data []int) string {
 		if i < len(data) {
 			d = data[i]
 		}
-		if len(n) > 30 {
-			n = n[:27] + "..."
-		}
-		rows = append(rows, table.Row{n, fmt.Sprintf("%d", a), fmt.Sprintf("%d", d)})
+		rows[i] = ModRow{Name: n, Assets: a, Data: d}
 	}
+	return RenderModpackTable(rows)
+}
+
+// RenderModpackTable renders mod rows with a totals footer row.
+func RenderModpackTable(rows []ModRow) string {
 	if len(rows) == 0 {
 		return Muted("  (no mods)")
 	}
-	t := table.New(
-		table.WithColumns(cols),
-		table.WithRows(rows),
-		table.WithHeight(len(rows)+1),
-	)
-	style := table.DefaultStyles()
-	style.Header = style.Header.Bold(true)
-	if noColor {
-		style.Header = lipgloss.NewStyle()
-		style.Selected = lipgloss.NewStyle()
+
+	data := make([][]string, 0, len(rows)+1)
+	totalA, totalD := 0, 0
+	for _, r := range rows {
+		name := r.Name
+		data = append(data, []string{name, fmt.Sprintf("%d", r.Namespaces), fmt.Sprintf("%d", r.Assets), fmt.Sprintf("%d", r.Data)})
+		totalA += r.Assets
+		totalD += r.Data
 	}
-	t.SetStyles(style)
-	return t.View()
+	data = append(data, []string{"Total", "", fmt.Sprintf("%d", totalA), fmt.Sprintf("%d", totalD)})
+
+	_, styleFn := tableStyle()
+	t := ltable.New().
+		Border(lipgloss.NormalBorder()).
+		Headers("Mod", "Namespaces", "Assets", "Data").
+		Rows(data...).
+		StyleFunc(styleFn)
+	return t.Render()
+}
+
+// RenderSummary renders a full single-mod summary: title, path,
+// one combined table with totals, and the namespace list.
+func RenderSummary(path string, namespaces []string, assets, data map[string]int) string {
+	var b strings.Builder
+	b.WriteString(Title("Minecraft Asset Summary"))
+	b.WriteString("\n\nPath: ")
+	b.WriteString(path)
+	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("Namespaces: %d\n", len(namespaces)))
+	b.WriteString(InspectTable(assets, data))
+	totalA, totalD := 0, 0
+	for _, v := range assets {
+		totalA += v
+	}
+	for _, v := range data {
+		totalD += v
+	}
+	b.WriteString(fmt.Sprintf("\nTotal: %d assets, %d data files\n", totalA, totalD))
+	b.WriteString("\nNamespaces\n")
+	if len(namespaces) == 0 {
+		b.WriteString("  (none)")
+		return b.String()
+	}
+	for _, n := range namespaces {
+		b.WriteString("  - ")
+		b.WriteString(n)
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// FormatBytes renders a byte count for download progress.
+func FormatBytes(n int64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	if n < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	if n < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(n)/(1024*1024*1024))
 }

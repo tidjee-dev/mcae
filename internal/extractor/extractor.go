@@ -1,12 +1,23 @@
+// Package extractor implements filtered JAR extraction for mods, modpacks and vanilla clients.
 package extractor
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+)
+
+// Sentinel errors for stable handling and tests.
+var (
+	ErrModNotFound    = errors.New("mod file does not exist")
+	ErrModsNotFound   = errors.New("mods directory not found")
+	ErrNoJars         = errors.New("no mod JARs found")
+	ErrInvalidInput   = errors.New("unsupported input")
+	ErrInvalidModpack = errors.New("invalid modpack")
 )
 
 // Result summarizes a single JAR extraction.
@@ -160,18 +171,24 @@ func ExtractJar(jarPath, dest string) (assets, data int, err error) {
 // If outputBase is empty, "./extracted/<modname>" is used,
 // otherwise "<outputBase>/<modname>".
 func ExtractMod(jarPath, outputBase string) (Result, error) {
+	return ExtractModWithForce(jarPath, outputBase, false)
+}
+
+// ExtractModWithForce is ExtractMod with an explicit overwrite policy.
+// With force=true the destination directory is removed first.
+func ExtractModWithForce(jarPath, outputBase string, force bool) (Result, error) {
 	info, err := os.Stat(jarPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Result{}, fmt.Errorf("mod file does not exist: %s", jarPath)
+			return Result{}, fmt.Errorf("%w: %s", ErrModNotFound, jarPath)
 		}
 		return Result{}, fmt.Errorf("stat mod file: %w", err)
 	}
 	if info.IsDir() {
-		return Result{}, fmt.Errorf("unsupported input (expected a .jar file): %s", jarPath)
+		return Result{}, fmt.Errorf("%w (expected a .jar file): %s", ErrInvalidInput, jarPath)
 	}
 	if strings.ToLower(filepath.Ext(jarPath)) != ".jar" {
-		return Result{}, fmt.Errorf("unsupported input (expected a .jar file): %s", jarPath)
+		return Result{}, fmt.Errorf("%w (expected a .jar file): %s", ErrInvalidInput, jarPath)
 	}
 
 	modName := JarModName(jarPath)
@@ -182,7 +199,11 @@ func ExtractMod(jarPath, outputBase string) (Result, error) {
 		dest = filepath.Join(outputBase, modName)
 	}
 
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if force {
+		if err := resetDir(dest); err != nil {
+			return Result{}, err
+		}
+	} else if err := os.MkdirAll(dest, 0o755); err != nil {
 		return Result{}, fmt.Errorf("create output directory: %w", err)
 	}
 
@@ -199,43 +220,66 @@ func ExtractMod(jarPath, outputBase string) (Result, error) {
 	}, nil
 }
 
+// resetDir removes dest (if present) and recreates it.
+// The path is cleaned and must be non-empty to avoid catastrophic deletes.
+func resetDir(dest string) error {
+	clean := filepath.Clean(dest)
+	if clean == "" || clean == "." || clean == "/" {
+		return fmt.Errorf("refuse to reset unsafe directory: %q", dest)
+	}
+	if err := os.RemoveAll(clean); err != nil {
+		return fmt.Errorf("clean output directory: %w", err)
+	}
+	if err := os.MkdirAll(clean, 0o755); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+	return nil
+}
+
 // ExtractModpack extracts every .jar directly inside <modpack>/mods.
 // If outputBase is empty, "<modpack>/extracted" is used.
 func ExtractModpack(modpackDir, outputBase string) ([]Result, error) {
+	return ExtractModpackWithForce(modpackDir, outputBase, false, nil)
+}
+
+// ModProgress is called after each JAR finishes (index is 0-based).
+type ModProgress func(index, total int, res Result)
+
+// ListModJars returns the .jar base names directly inside <modpack>/mods
+// plus the resolved mods and output directories.
+func ListModJars(modpackDir, outputBase string) (modsDir, outputDir string, jars []string, err error) {
 	info, err := os.Stat(modpackDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("modpack does not exist: %s", modpackDir)
+			return "", "", nil, fmt.Errorf("modpack does not exist: %s", modpackDir)
 		}
-		return nil, fmt.Errorf("stat modpack: %w", err)
+		return "", "", nil, fmt.Errorf("stat modpack: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("invalid modpack (not a directory): %s", modpackDir)
+		return "", "", nil, fmt.Errorf("%w (not a directory): %s", ErrInvalidModpack, modpackDir)
 	}
 
-	modsDir := filepath.Join(modpackDir, "mods")
+	modsDir = filepath.Join(modpackDir, "mods")
 	modsInfo, err := os.Stat(modsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("invalid modpack: mods directory not found: %s", modsDir)
+			return "", "", nil, fmt.Errorf("%w: mods directory not found: %s", ErrInvalidModpack, modsDir)
 		}
-		return nil, fmt.Errorf("stat mods directory: %w", err)
+		return "", "", nil, fmt.Errorf("stat mods directory: %w", err)
 	}
 	if !modsInfo.IsDir() {
-		return nil, fmt.Errorf("invalid modpack: mods directory not found: %s", modsDir)
+		return "", "", nil, fmt.Errorf("%w: mods directory not found: %s", ErrInvalidModpack, modsDir)
 	}
 
-	outputDir := outputBase
+	outputDir = outputBase
 	if outputDir == "" {
 		outputDir = filepath.Join(modpackDir, "extracted")
 	}
 
 	entries, err := os.ReadDir(modsDir)
 	if err != nil {
-		return nil, fmt.Errorf("mods directory does not exist: %w", err)
+		return "", "", nil, fmt.Errorf("mods directory does not exist: %w", err)
 	}
-
-	var jars []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -245,9 +289,18 @@ func ExtractModpack(modpackDir, outputBase string) ([]Result, error) {
 		}
 		jars = append(jars, entry.Name())
 	}
-
 	if len(jars) == 0 {
-		return nil, fmt.Errorf("no mod JARs found in %s", modsDir)
+		return "", "", nil, fmt.Errorf("%w in %s", ErrNoJars, modsDir)
+	}
+	return modsDir, outputDir, jars, nil
+}
+
+// ExtractModpackWithForce streams per-mod results via onMod.
+// With force=true each mod destination is removed first.
+func ExtractModpackWithForce(modpackDir, outputBase string, force bool, onMod ModProgress) ([]Result, error) {
+	modsDir, outputDir, jars, err := ListModJars(modpackDir, outputBase)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
@@ -255,11 +308,15 @@ func ExtractModpack(modpackDir, outputBase string) ([]Result, error) {
 	}
 
 	var results []Result
-	for _, name := range jars {
+	for i, name := range jars {
 		jarPath := filepath.Join(modsDir, name)
 		dest := filepath.Join(outputDir, JarModName(name))
 
-		if err := os.MkdirAll(dest, 0o755); err != nil {
+		if force {
+			if err := resetDir(dest); err != nil {
+				return nil, err
+			}
+		} else if err := os.MkdirAll(dest, 0o755); err != nil {
 			return nil, fmt.Errorf("create output directory: %w", err)
 		}
 
@@ -268,12 +325,16 @@ func ExtractModpack(modpackDir, outputBase string) ([]Result, error) {
 			return nil, fmt.Errorf("extract %s: %w", name, err)
 		}
 
-		results = append(results, Result{
+		res := Result{
 			JarName: name,
 			OutDir:  dest,
 			Assets:  assets,
 			Data:    data,
-		})
+		}
+		results = append(results, res)
+		if onMod != nil {
+			onMod(i, len(jars), res)
+		}
 	}
 
 	return results, nil

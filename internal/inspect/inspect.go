@@ -1,3 +1,4 @@
+// Package inspect summarizes retained Minecraft assets in JAR files and directories.
 package inspect
 
 import (
@@ -11,6 +12,9 @@ import (
 
 	"github.com/tidjee-dev/mcae/internal/extractor"
 )
+
+// ErrNoMods is returned when a modpack directory contains no JARs.
+var ErrNoMods = extractor.ErrNoJars
 
 // Asset categories shown in the summary.
 const (
@@ -44,6 +48,33 @@ type ModpackSummary struct {
 type Report struct {
 	Single  *Summary
 	Modpack *ModpackSummary
+}
+
+// TotalAssets sums all asset counts.
+func (s *Summary) TotalAssets() int {
+	n := 0
+	for _, v := range s.Assets {
+		n += v
+	}
+	return n
+}
+
+// TotalData sums all data counts.
+func (s *Summary) TotalData() int {
+	n := 0
+	for _, v := range s.Data {
+		n += v
+	}
+	return n
+}
+
+// Totals aggregates modpack asset/data counts.
+func (m *ModpackSummary) Totals() (assets, data int) {
+	for _, s := range m.Mods {
+		assets += s.TotalAssets()
+		data += s.TotalData()
+	}
+	return assets, data
 }
 
 func newSummary(path string) *Summary {
@@ -224,6 +255,9 @@ func Inspect(path string) (Report, error) {
 				return Report{}, fmt.Errorf("inspect %s: %w", e.Name(), err)
 			}
 			mp.Mods = append(mp.Mods, *s)
+		}
+		if len(mp.Mods) == 0 {
+			return Report{}, fmt.Errorf("%w in %s", ErrNoMods, modsDir)
 		}
 		// Also consider already-extracted dirs: <path>/extracted/* for JARs
 		// missing from mods/ is out of scope; keep it simple.

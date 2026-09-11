@@ -1,3 +1,4 @@
+// Package extract implements the mcae extract command group (mod, modpack, vanilla).
 package extract
 
 import (

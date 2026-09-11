@@ -181,8 +181,18 @@ func ExtractVanilla(versionID, outputBase string, onProgress ProgressFunc) (Extr
 	return ExtractVanillaWithManifest(versionID, outputBase, DefaultManifestURL, onProgress)
 }
 
+// ExtractVanillaWithForce is ExtractVanilla with an explicit overwrite policy.
+func ExtractVanillaWithForce(versionID, outputBase string, force bool, onProgress ProgressFunc) (ExtractResult, error) {
+	return ExtractVanillaWithManifestAndForce(versionID, outputBase, DefaultManifestURL, force, onProgress)
+}
+
 // ExtractVanillaWithManifest is ExtractVanilla with an injectable manifest URL (for tests).
 func ExtractVanillaWithManifest(versionID, outputBase, manifestURL string, onProgress ProgressFunc) (ExtractResult, error) {
+	return ExtractVanillaWithManifestAndForce(versionID, outputBase, manifestURL, false, onProgress)
+}
+
+// ExtractVanillaWithManifestAndForce adds force + injectable manifest URL.
+func ExtractVanillaWithManifestAndForce(versionID, outputBase, manifestURL string, force bool, onProgress ProgressFunc) (ExtractResult, error) {
 	if versionID == "" {
 		return ExtractResult{}, fmt.Errorf("minecraft version is required")
 	}
@@ -193,6 +203,11 @@ func ExtractVanillaWithManifest(versionID, outputBase, manifestURL string, onPro
 	}
 	dest := filepath.Join(base, "vanilla", versionID)
 
+	if force {
+		if err := os.RemoveAll(filepath.Clean(dest)); err != nil {
+			return ExtractResult{}, fmt.Errorf("clean output directory: %w", err)
+		}
+	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return ExtractResult{}, fmt.Errorf("create output directory: %w", err)
 	}
@@ -209,6 +224,36 @@ func ExtractVanillaWithManifest(versionID, outputBase, manifestURL string, onPro
 		return ExtractResult{}, err
 	}
 	defer cleanup()
+
+	return ExtractDownloadedJarWithManifest(versionID, outputBase, force, jarPath)
+}
+
+// ExtractDownloadedJar extracts an already-downloaded client JAR.
+func ExtractDownloadedJar(versionID, outputBase string, force bool, jarPath string) (ExtractResult, error) {
+	return ExtractDownloadedJarWithManifest(versionID, outputBase, force, jarPath)
+}
+
+// ExtractDownloadedJarWithManifest extracts a local client JAR to the
+// vanilla output directory (used by the live TUI worker).
+func ExtractDownloadedJarWithManifest(versionID, outputBase string, force bool, jarPath string) (ExtractResult, error) {
+	if versionID == "" {
+		return ExtractResult{}, fmt.Errorf("minecraft version is required")
+	}
+
+	base := outputBase
+	if base == "" {
+		base = "extracted"
+	}
+	dest := filepath.Join(base, "vanilla", versionID)
+
+	if force {
+		if err := os.RemoveAll(filepath.Clean(dest)); err != nil {
+			return ExtractResult{}, fmt.Errorf("clean output directory: %w", err)
+		}
+	}
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return ExtractResult{}, fmt.Errorf("create output directory: %w", err)
+	}
 
 	assets, data, err := extractor.ExtractJar(jarPath, dest)
 	if err != nil {
